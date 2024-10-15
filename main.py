@@ -1,4 +1,10 @@
 import time
+import pyautogui
+import pyperclip
+import cv2
+#from skimage.measure import compare_ssim
+import numpy as np
+import slack_sdk
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -8,24 +14,35 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.select import Select
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
+from datetime import datetime
+
 
 
 driver = None
 isSuccess = False
+isDone = False
 
 id = ''
 pw = ''
 departures = '광주송정'
 arrivals = '수서'
 date = '20241010'
-hour = '12'
+hour = '10'
 headCount = '2'
 
+secondPassengerName = ''
+payPassword = ''
+
+naverUserName = ''
+naverPassword = ''
+
+slack_token = ''
+slack_client = slack_sdk.WebClient(token=slack_token)
 
 def driverFindClickAbleToXpath(xpath):
     global driver
 
-    element = WebDriverWait(driver, 300000).until(
+    element = WebDriverWait(driver, 3000).until(
         EC.element_to_be_clickable((By.XPATH, xpath))
     )
     return element
@@ -34,7 +51,7 @@ def driverFindClickAbleToXpath(xpath):
 def driverFindLocatedToXpath(xpath):
     global driver
 
-    element = WebDriverWait(driver, 300000).until(
+    element = WebDriverWait(driver, 300).until(
         EC.presence_of_element_located((By.XPATH, xpath))
     )
     return element
@@ -44,7 +61,7 @@ def driverFindIgnoredExceptionToXpath(xpath):
 
     ignored_exceptions = (NoSuchElementException,StaleElementReferenceException)
 
-    element = WebDriverWait(driver, 300000, ignored_exceptions = ignored_exceptions).until(
+    element = WebDriverWait(driver, 300, ignored_exceptions = ignored_exceptions).until(
         EC.visibility_of_element_located((By.XPATH, xpath))
     )
     return element
@@ -104,7 +121,9 @@ def researchTrainList():
     # except selenium.common.exceptions.StaleElementRefrenceException:
     #     btn_ReSearch = driverFindClickAbleToXpath('//*[@id="search_top_tag"]/input')
     #     btn_Research.click()
-    div_TrainList = driverFindLocatedToXpath('//*[@id="result-form"]/fieldset/div[6]')
+
+    #div_TrainList = driverFindLocatedToXpath('//*[@id="result-form"]/fieldset/div[6]')
+    
     #print('div_TrainList ----------------', div_TrainList)
 
 driver = webdriver.Chrome()
@@ -114,9 +133,119 @@ driver.get("https://etk.srail.kr/main.do")
 login(id, pw)
 searchTrainList(departures, arrivals, date, hour, headCount)
 
+def reservation(secondPassengerName):
+    global driver
+
+    btn_checkout = driverFindClickAbleToXpath('//*[@id="list-form"]/fieldset/div[11]/a[1]')
+    btn_checkout.click()
+
+    li_easyPayment = driverFindClickAbleToXpath('//*[@id="chTab2"]')
+    li_easyPayment.click()
+
+    time.sleep(1)
+
+    txt_secondPassenger = driverFindLocatedToXpath('//*[@id="select-form"]/fieldset/div[11]/div[5]/div[3]/table/tbody/tr[2]/td[8]/input[2]')
+    txt_secondPassenger.send_keys(secondPassengerName)
+
+    btn_callPayment = driverFindClickAbleToXpath('//*[@id="requestIssue2"]')
+    btn_callPayment.click()
+
+def naverLogin(naverUserName, naverPassword):
+    global driver
+    #newTab switch Check,
+    time.sleep(2)
+    driver.switch_to.window(driver.window_handles[-2])
+    print("naverLogin")
+    #driver.get('https://nid.naver.com/nidlogin.login?mode=form&url=https%3A%2F%2Fwww.naver.com')
+    #driver.switch_to_default_content()
+
+    input_id = driverFindLocatedToXpath('//*[@id="id"]')
+    input_pw = driverFindLocatedToXpath('//*[@id="pw"]')
+
+    #import platform
+    #platform.system() return 'Windows'
+    #diff key wid = CONTROL, mac = COMMAND
+
+    input_id.click() 
+    pyperclip.copy(naverUserName) 
+    input_id.send_keys(Keys.CONTROL, 'v')
+    time.sleep(1)
+
+    input_pw.click() 
+    pyperclip.copy(naverPassword) 
+    input_pw.send_keys(Keys.CONTROL, 'v')
+    time.sleep(1)
+
+    form = driverFindLocatedToXpath('//*[@id="frmNIDLogin"]')
+    form.submit()
+
+def naverSecondAuth():
+    try:
+        btn_sendAlt = driverFindClickAbleToXpath('//*[@id="resendBtn"]')
+        btn_sendAlt.click()
+    except:
+        print("naverSecondAuth Except")
+
+
+def naverPayAutoCheckout(payPassword):
+    global isSuccess
+
+    btn_Paid = driverFindClickAbleToXpath('//*[@id="root"]/div/div[3]/div/div/div[2]/button')
+    btn_Paid.click()
+
+    div_passwordMasking = driverFindLocatedToXpath('//*[@id="__next"]/div[2]/div/div/div/div[1]/div/div/div[2]/div[1]')
+    
+    locateArr = np.empty((0,2), float)
+
+    _screen = np.array(pyautogui.screenshot())
+    img = cv2.cvtColor(_screen, cv2.COLOR_RGB2GRAY)
+
+    #cv2.imshow("result", _screen)
+    #cv2.waitKey(0)
+
+    for i in payPassword:
+        target = cv2.imread(f'image/{i}.png', cv2.IMREAD_GRAYSCALE)
+        result = cv2.matchTemplate(img, target, cv2.TM_CCOEFF_NORMED)
+
+        minValue, maxValue, minLoc, maxLoc = cv2.minMaxLoc(result)
+
+        width_center = maxLoc[0] + (target.shape[1] / 2)
+        height_center = maxLoc[1] + (target.shape[0] / 2)
+
+        locateArr = np.append(locateArr, np.array([[width_center, height_center]]), axis=0)
+        
+        #leftTop = maxLoc
+        #print(minValue, maxValue, minLoc, maxLoc)
+        #rightBottom = maxLoc[0]+ target.shape[1], maxLoc[1] + target.shape[0]
+        #cv2.rectangle(_screen, leftTop, rightBottom, (255,255,0), 3)
+
+    # cv2.imshow("result", _screen)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    for x in locateArr:
+        print(x)
+        pyautogui.moveTo(x[0], x[1])
+        pyautogui.click()
+        time.sleep(0.5)
+    
+    isSuccess = True
+
+def postMessage(message):
+    global slack_client
+    """인자로 받은 문자열을 파이썬 셸과 슬랙으로 동시에 출력한다."""
+    # 로컬에서만 파이썬 셀 출력
+    strbuf = datetime.now().strftime('[%m/%d %H:%M:%S] ') + message
+
+    response = slack_client.chat_postMessage(
+        channel='abstract-robot',
+        text = strbuf
+    )
+
+
+postMessage('SRT 자동 예약 실행')
+
 while isSuccess == False:
     for i in range(1, 11):
-        #print("i = ", i)
         try:
             td = driverFindLocatedToXpath(f'//*[@id="result-form"]/fieldset/div[6]/table/tbody/tr[{i}]/td[7]')
             print('td', td)
@@ -131,15 +260,31 @@ while isSuccess == False:
             print("--------StaleElementReferenceException--------")
             td = None
             btn_reservations = None
-            time.sleep(1.5)
             continue
         except:
-            input()
+            searchTrainList(departures, arrivals, date, hour, headCount)
 
         if(len(btn_reservations) > 1):
             btn_reservations[0].click()
-            isSuccess = True
-            print('isSuccess', isSuccess)
+            print('Go Reservation')
+            reservation(secondPassengerName)
+            time.sleep(1)
+            naverLogin(naverUserName, naverPassword)
+            time.sleep(1)
+            naverSecondAuth()
+            time.sleep(1)
+            naverPayAutoCheckout(payPassword)
+            postMessage("예약 완료!")
             break
-    researchTrainList()
+
+    if isSuccess == True:
+        break
+
+    try:
+        researchTrainList()
+    except:
+        searchTrainList(departures, arrivals, date, hour, headCount)
     time.sleep(1)
+
+postMessage('SRT 자동 예약 종료')
+input()
