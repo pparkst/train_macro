@@ -23,21 +23,27 @@ isSuccess = False
 isDone = False
 
 id = ''
-pw = ''
+pw = '!'
 departures = '광주송정'
 arrivals = '수서'
 date = '20241010'
-hour = '10'
+hour = '12'
 headCount = '2'
+
+list_row_Count = 3
 
 secondPassengerName = ''
 payPassword = ''
 
 naverUserName = ''
-naverPassword = ''
+naverPassword = '!'
 
 slack_token = ''
 slack_client = slack_sdk.WebClient(token=slack_token)
+
+refreshCnt = 0
+macro_Start_hour = 0
+macro_Start_Date = datetime.now()
 
 def driverFindClickAbleToXpath(xpath):
     global driver
@@ -81,7 +87,10 @@ def login(id, pw):
 
 
 def searchTrainList(departures, arrivals, date, hour, headCount):
+    global refreshCnt
     global driver
+    
+    refreshCnt+=1
 
     driver.get('https://etk.srail.kr/hpg/hra/01/selectScheduleList.do?pageId=TK0101010000')
 
@@ -112,6 +121,8 @@ def searchTrainList(departures, arrivals, date, hour, headCount):
     btn_Search.click()
 
 def researchTrainList():
+    global refreshCnt
+    refreshCnt+=1
     #print('researchTrainList')
     btn_ReSearch = driverFindClickAbleToXpath('//*[@id="search_top_tag"]/input')
     btn_ReSearch.send_keys(Keys.ENTER)
@@ -132,6 +143,22 @@ driver.get("https://etk.srail.kr/main.do")
 
 login(id, pw)
 searchTrainList(departures, arrivals, date, hour, headCount)
+
+def reservationBankWire():
+    # 미사용
+    global driver
+
+    btn_checkout = driverFindClickAbleToXpath('//*[@id="list-form"]/fieldset/div[11]/a[1]')
+    btn_checkout.click()
+
+    li_bankWire = driverFindClickAbleToXpath('//*[@id="chTab3"]')
+    li_bankWire.click()
+
+    li_smartPhoneTicketing = driverFindClickAbleToXpath('//*[@id="select-form"]/fieldset/div[11]/div[2]/ul/li[2]/a')
+    li_smartPhoneTicketing.click()
+
+    alert = driver.switch_to.alert
+    alert.accept()
 
 def reservation(secondPassengerName):
     global driver
@@ -223,10 +250,9 @@ def naverPayAutoCheckout(payPassword):
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
     for x in locateArr:
-        print(x)
+        # print(x)
         pyautogui.moveTo(x[0], x[1])
         pyautogui.click()
-        time.sleep(0.5)
     
     isSuccess = True
 
@@ -235,7 +261,7 @@ def postMessage(message):
     """인자로 받은 문자열을 파이썬 셸과 슬랙으로 동시에 출력한다."""
     # 로컬에서만 파이썬 셀 출력
     strbuf = datetime.now().strftime('[%m/%d %H:%M:%S] ') + message
-
+    print(strbuf)
     response = slack_client.chat_postMessage(
         channel='abstract-robot',
         text = strbuf
@@ -245,12 +271,22 @@ def postMessage(message):
 postMessage('SRT 자동 예약 실행')
 
 while isSuccess == False:
-    for i in range(1, 11):
+    print('refreshCnt', refreshCnt)
+
+    process_hour = datetime.now().hour
+    if(macro_Start_hour != process_hour):
+        macro_Start_hour = process_hour
+        postMessage("SRT 자동 예약 실행중..\\")
+
+    if(refreshCnt % 10 == 0):
+        now = datetime.now()
+        diff = now - macro_Start_Date
+        print(f'd: {diff.days} / h: {diff.seconds / 3600} / m: {diff.seconds / 60}') 
+
+    for i in range(1, list_row_Count+1):
         try:
             td = driverFindLocatedToXpath(f'//*[@id="result-form"]/fieldset/div[6]/table/tbody/tr[{i}]/td[7]')
-            print('td', td)
             btn_reservations = td.find_elements(By.TAG_NAME, 'a')
-            print('btn_reservations', btn_reservations)
         except NoSuchElementException:
             print("--------NoSuchElementException--------")
             td = None
@@ -264,9 +300,9 @@ while isSuccess == False:
         except:
             searchTrainList(departures, arrivals, date, hour, headCount)
 
-        if(len(btn_reservations) > 1):
+        if(btn_reservations != None and len(btn_reservations) > 1):
             btn_reservations[0].click()
-            print('Go Reservation')
+            postMessage('티켓 발견 예약 진행')
             reservation(secondPassengerName)
             time.sleep(1)
             naverLogin(naverUserName, naverPassword)
