@@ -1,5 +1,6 @@
 import time
 import pyautogui
+import config
 import pyperclip
 import cv2
 #from skimage.measure import compare_ssim
@@ -16,31 +17,11 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import StaleElementReferenceException
 from datetime import datetime
 
-
-
 driver = None
 isSuccess = False
 isDone = False
 
-id = ''
-pw = '!'
-departures = '광주송정'
-arrivals = '수서'
-date = '20241010'
-hour = '12'
-headCount = '2'
-
-list_row_Count = 3
-
-secondPassengerName = ''
-payPassword = ''
-
-naverUserName = ''
-naverPassword = '!'
-
-slack_token = ''
-slack_client = slack_sdk.WebClient(token=slack_token)
-
+slack_client = slack_sdk.WebClient(token=config.SLACK_INFO.TOKEN)
 refreshCnt = 0
 macro_Start_hour = 0
 macro_Start_Date = datetime.now()
@@ -48,7 +29,7 @@ macro_Start_Date = datetime.now()
 def driverFindClickAbleToXpath(xpath):
     global driver
 
-    element = WebDriverWait(driver, 3000).until(
+    element = WebDriverWait(driver, 100).until(
         EC.element_to_be_clickable((By.XPATH, xpath))
     )
     return element
@@ -57,7 +38,7 @@ def driverFindClickAbleToXpath(xpath):
 def driverFindLocatedToXpath(xpath):
     global driver
 
-    element = WebDriverWait(driver, 300).until(
+    element = WebDriverWait(driver, 100).until(
         EC.presence_of_element_located((By.XPATH, xpath))
     )
     return element
@@ -67,29 +48,29 @@ def driverFindIgnoredExceptionToXpath(xpath):
 
     ignored_exceptions = (NoSuchElementException,StaleElementReferenceException)
 
-    element = WebDriverWait(driver, 300, ignored_exceptions = ignored_exceptions).until(
+    element = WebDriverWait(driver, 100, ignored_exceptions = ignored_exceptions).until(
         EC.visibility_of_element_located((By.XPATH, xpath))
     )
     return element
 
-def login(id, pw):
+def login(srtInfo):
     btn_Login = driverFindClickAbleToXpath('//*[@id="wrap"]/div[3]/div[1]/div/a[2]')
     btn_Login.click()
 
     txt_id = driverFindLocatedToXpath('//*[@id="srchDvNm01"]')
-    txt_id.send_keys(id)
+    txt_id.send_keys(srtInfo.ID)
 
     txt_pw = driverFindLocatedToXpath('//*[@id="hmpgPwdCphd01"]')
-    txt_pw.send_keys(pw)
+    txt_pw.send_keys(srtInfo.PW)
 
     btn_LoginConfirm = driverFindClickAbleToXpath('//*[@id="login-form"]/fieldset/div[1]/div[1]/div[2]/div/div[2]/input')
     btn_LoginConfirm.click()
 
 
-def searchTrainList(departures, arrivals, date, hour, headCount):
+def searchTrainList(srtInfo):
     global refreshCnt
     global driver
-    
+    print("searchTrainList")
     refreshCnt+=1
 
     driver.get('https://etk.srail.kr/hpg/hra/01/selectScheduleList.do?pageId=TK0101010000')
@@ -98,21 +79,22 @@ def searchTrainList(departures, arrivals, date, hour, headCount):
     txt_Arrivals = driverFindLocatedToXpath('//*[@id="arvRsStnCdNm"]')
 
     txt_Departures.clear()
-    txt_Departures.send_keys(departures)
+    txt_Departures.send_keys(srtInfo.DEPARTURES)
 
     txt_Arrivals.clear()
-    txt_Arrivals.send_keys(arrivals)
+    txt_Arrivals.send_keys(srtInfo.ARRIVALS)
 
     slt_date = Select(driverFindLocatedToXpath('//*[@id="dptDt"]'))
-    slt_date.select_by_value(date)
+    slt_date.select_by_value(srtInfo.DATE)
 
-    hour += '0000'
+    if(len(srtInfo.HOUR) == 2):
+        srtInfo.HOUR += '0000'
 
     slt_time = Select(driverFindLocatedToXpath('//*[@id="dptTm"]'))
-    slt_time.select_by_value(hour)
+    slt_time.select_by_value(srtInfo.HOUR)
 
     slt_HeadCount = Select(driverFindLocatedToXpath('//*[@id="psgInfoPerPrnb1"]'))
-    slt_HeadCount.select_by_value(headCount)
+    slt_HeadCount.select_by_value(srtInfo.HEAD_COUNT)
 
     rdo_TrainKind = driverFindClickAbleToXpath('//*[@id="trnGpCd300"]')
     rdo_TrainKind.click()
@@ -137,12 +119,7 @@ def researchTrainList():
     
     #print('div_TrainList ----------------', div_TrainList)
 
-driver = webdriver.Chrome()
-driver.get("https://etk.srail.kr/main.do")
 
-
-login(id, pw)
-searchTrainList(departures, arrivals, date, hour, headCount)
 
 def reservationBankWire():
     # 미사용
@@ -177,14 +154,11 @@ def reservation(secondPassengerName):
     btn_callPayment = driverFindClickAbleToXpath('//*[@id="requestIssue2"]')
     btn_callPayment.click()
 
-def naverLogin(naverUserName, naverPassword):
+def naverLogin(naverInfo):
     global driver
-    #newTab switch Check,
     time.sleep(2)
     driver.switch_to.window(driver.window_handles[-2])
     print("naverLogin")
-    #driver.get('https://nid.naver.com/nidlogin.login?mode=form&url=https%3A%2F%2Fwww.naver.com')
-    #driver.switch_to_default_content()
 
     input_id = driverFindLocatedToXpath('//*[@id="id"]')
     input_pw = driverFindLocatedToXpath('//*[@id="pw"]')
@@ -194,12 +168,12 @@ def naverLogin(naverUserName, naverPassword):
     #diff key wid = CONTROL, mac = COMMAND
 
     input_id.click() 
-    pyperclip.copy(naverUserName) 
+    pyperclip.copy(naverInfo.ID) 
     input_id.send_keys(Keys.CONTROL, 'v')
     time.sleep(1)
 
     input_pw.click() 
-    pyperclip.copy(naverPassword) 
+    pyperclip.copy(naverInfo.PW) 
     input_pw.send_keys(Keys.CONTROL, 'v')
     time.sleep(1)
 
@@ -268,11 +242,16 @@ def postMessage(message):
     )
 
 
+driver = webdriver.Chrome()
+driver.get("https://etk.srail.kr/main.do")
+
+
+login(config.SRT_INFO)
+searchTrainList(config.SRT_INFO)
+
 postMessage('SRT 자동 예약 실행')
 
 while isSuccess == False:
-    print('refreshCnt', refreshCnt)
-
     process_hour = datetime.now().hour
     if(macro_Start_hour != process_hour):
         macro_Start_hour = process_hour
@@ -281,9 +260,9 @@ while isSuccess == False:
     if(refreshCnt % 10 == 0):
         now = datetime.now()
         diff = now - macro_Start_Date
-        print(f'd: {diff.days} / h: {diff.seconds / 3600} / m: {diff.seconds / 60}') 
+        print(f'refresh: {refreshCnt} - d: {diff.days} / h: {round(diff.seconds / 3600)} / m: {round(diff.seconds / 60)}')
 
-    for i in range(1, list_row_Count+1):
+    for i in range(1, config.SRT_INFO.LIST_ROW_COUNT+1):
         try:
             td = driverFindLocatedToXpath(f'//*[@id="result-form"]/fieldset/div[6]/table/tbody/tr[{i}]/td[7]')
             btn_reservations = td.find_elements(By.TAG_NAME, 'a')
@@ -298,18 +277,18 @@ while isSuccess == False:
             btn_reservations = None
             continue
         except:
-            searchTrainList(departures, arrivals, date, hour, headCount)
+            searchTrainList(config.SRT_INFO)
 
         if(btn_reservations != None and len(btn_reservations) > 1):
             btn_reservations[0].click()
             postMessage('티켓 발견 예약 진행')
-            reservation(secondPassengerName)
+            reservation(config.SRT_INFO.SECOND_PASSENGER_NAME)
             time.sleep(1)
-            naverLogin(naverUserName, naverPassword)
+            naverLogin(config.NAVER_INFO)
             time.sleep(1)
             naverSecondAuth()
             time.sleep(1)
-            naverPayAutoCheckout(payPassword)
+            naverPayAutoCheckout(config.NAVER_INFO.PAY_PW)
             postMessage("예약 완료!")
             break
 
@@ -319,8 +298,9 @@ while isSuccess == False:
     try:
         researchTrainList()
     except:
-        searchTrainList(departures, arrivals, date, hour, headCount)
-    time.sleep(1)
+        searchTrainList(config.SRT_INFO)
+
+    time.sleep(0.7)
 
 postMessage('SRT 자동 예약 종료')
 input()
