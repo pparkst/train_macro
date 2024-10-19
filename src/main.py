@@ -23,6 +23,7 @@ isDone = False
 
 slack_client = slack_sdk.WebClient(token=config.SLACK_INFO.TOKEN)
 refreshCnt = 0
+windowCnt = 0
 macro_Start_hour = 0
 macro_Start_Date = datetime.now()
 
@@ -251,6 +252,8 @@ searchTrainList(config.SRT_INFO)
 
 postMessage('SRT 자동 예약 실행')
 
+btn_reservations = None
+
 while isSuccess == False:
     process_hour = datetime.now().hour
     if(macro_Start_hour != process_hour):
@@ -265,6 +268,11 @@ while isSuccess == False:
     for i in range(1, config.SRT_INFO.LIST_ROW_COUNT+1):
         try:
             td = driverFindLocatedToXpath(f'//*[@id="result-form"]/fieldset/div[6]/table/tbody/tr[{i}]/td[7]')
+            span = td.find_element(By.TAG_NAME, 'span')
+            spanTxt = span.get_attribute('innerHTML')
+            if(spanTxt != '매진'):
+                print(spanTxt)
+                #postMessage(spanTxt)
             btn_reservations = td.find_elements(By.TAG_NAME, 'a')
         except NoSuchElementException:
             print("--------NoSuchElementException--------")
@@ -275,8 +283,9 @@ while isSuccess == False:
             print("--------StaleElementReferenceException--------")
             td = None
             btn_reservations = None
-            continue
-        except:
+            continue 
+        except Exception as ex:
+            print("except", ex)
             searchTrainList(config.SRT_INFO)
 
         if(btn_reservations != None and len(btn_reservations) > 1):

@@ -1,18 +1,18 @@
 class SRT_INFO():
     ID = ''
-    PW = ''
-    DEPARTURES = '광주송정'
-    ARRIVALS = '수서'
-    DATE = '20241027'
-    HOUR = '12'
+    PW = '!'
+    DEPARTURES = '수서'
+    ARRIVALS = '광주송정'
+    DATE = ''
+    HOUR = ''
     HEAD_COUNT = '2'
-    LIST_ROW_COUNT = 3
+    LIST_ROW_COUNT = 2
 
     SECOND_PASSENGER_NAME = ''
 
 class NAVER_INFO():
     ID = ''
-    PW = ''
+    PW = '!'
     PAY_PW = ''
 
 
